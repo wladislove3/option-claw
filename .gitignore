@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+backend/bin/
+backend/pkg/
+
+# Go binary
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend/cmd/api/api
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+*.out
