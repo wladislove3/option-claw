@@ -36,12 +36,13 @@ type MatrixRequest struct {
 
 // MatrixResponse represents the API response
 type MatrixResponse struct {
-	PriceAxis    []float64 `json:"price_axis"`    // X-axis: price range
-	TimeAxis     []float64 `json:"time_axis"`     // Y-axis: time range (days)
-	PnLMatrix    [][]float64 `json:"pnl_matrix"`  // 2D P&L values
-	MaxProfit    float64   `json:"max_profit"`
-	MaxLoss      float64   `json:"max_loss"`
-	Breakevens   []float64 `json:"breakevens,omitempty"`
+	PriceAxis       []float64 `json:"price_axis"`        // X-axis: price range
+	TimeAxis        []float64 `json:"time_axis"`         // Y-axis: time range (days)
+	PnLMatrix       [][]float64 `json:"pnl_matrix"`      // 2D P&L values
+	MaxProfit       float64   `json:"max_profit"`
+	MaxLoss         float64   `json:"max_loss"`
+	Breakevens      []float64 `json:"breakevens,omitempty"`
+	UnderlyingPrice float64   `json:"underlying_price"`  // Current spot price for reference line
 }
 
 // ErrorResponse represents an API error

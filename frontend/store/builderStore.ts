@@ -10,12 +10,15 @@ interface BuilderState {
   matrixData: MatrixResponse | null;
   isLoading: boolean;
   error: string | null;
+  bybitApiKey: string;
+  bybitApiSecret: string;
 
   // Actions
   setUnderlyingPrice: (price: number) => void;
   setVolatility: (vol: number) => void;
   setRiskFreeRate: (rate: number) => void;
   setDaysToExpiry: (days: number) => void;
+  setBybitCredentials: (apiKey: string, apiSecret: string) => void;
   addLeg: (leg: OptionLeg) => void;
   removeLeg: (index: number) => void;
   calculate: () => Promise<void>;
@@ -30,11 +33,14 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   matrixData: null,
   isLoading: false,
   error: null,
+  bybitApiKey: '',
+  bybitApiSecret: '',
 
   setUnderlyingPrice: (price) => set({ underlyingPrice: price }),
   setVolatility: (vol) => set({ volatility: vol }),
   setRiskFreeRate: (rate) => set({ riskFreeRate: rate }),
   setDaysToExpiry: (days) => set({ daysToExpiry: days }),
+  setBybitCredentials: (apiKey, apiSecret) => set({ bybitApiKey: apiKey, bybitApiSecret: apiSecret }),
   
   addLeg: (leg) => set((state) => ({ legs: [...state.legs, leg] })),
   removeLeg: (index) => set((state) => ({ legs: state.legs.filter((_, i) => i !== index) })),

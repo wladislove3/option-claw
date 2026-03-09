@@ -18,14 +18,15 @@ const (
 
 // OptionTick represents the latest market data and Greeks for a single option.
 type OptionTick struct {
-	Symbol    string  `json:"symbol"`
-	MarkPrice float64 `json:"markPrice"`
-	IV        float64 `json:"iv"`
-	Delta     float64 `json:"delta"`
-	Gamma     float64 `json:"gamma"`
-	Vega      float64 `json:"vega"`
-	Theta     float64 `json:"theta"`
-	UpdatedAt int64   `json:"updatedAt"`
+	Symbol          string  `json:"symbol"`
+	MarkPrice       float64 `json:"markPrice"`
+	IV              float64 `json:"iv"`
+	Delta           float64 `json:"delta"`
+	Gamma           float64 `json:"gamma"`
+	Vega            float64 `json:"vega"`
+	Theta           float64 `json:"theta"`
+	UnderlyingPrice float64 `json:"underlyingPrice"`
+	UpdatedAt       int64   `json:"updatedAt"`
 }
 
 // WSRequest is used to send commands to Bybit (subscribe, ping).
@@ -191,6 +192,9 @@ func (m *MarketStreamer) handleMessage(msg []byte) {
 			}
 			if val, ok := rawTick["theta"]; ok && val != "" {
 				tick.Theta = parseFloat(val)
+			}
+			if val, ok := rawTick["underlyingPrice"]; ok && val != "" {
+				tick.UnderlyingPrice = parseFloat(val)
 			}
 
 			tick.UpdatedAt = now

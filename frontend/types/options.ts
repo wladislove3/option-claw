@@ -24,6 +24,7 @@ export interface MatrixResponse {
   max_profit: number;
   max_loss: number;
   breakevens?: number[];
+  underlying_price: number;
 }
 
 export interface StrategyState {

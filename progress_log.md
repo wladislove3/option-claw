@@ -2,8 +2,8 @@
 
 ## Current Status
 **Started:** 2026-03-08 03:23 GMT+3
-**Current Phase:** Phase 1 - Initialization and Infrastructure
-**Current Step:** 1/50
+**Current Phase:** Phase 9 - Real Bybit Integration
+**Current Step:** 59/62
 
 ---
 
@@ -106,8 +106,64 @@
 
 ---
 
+## Phase 8: Personal Cabinet Integration (Steps 51-58)
+
+- [x] **Step 51:** Integrate help repo - Personal cabinet from temp_help ✓
+- [x] **Step 52:** Cabinet Layout - Create sidebar navigation with Next.js App Router ✓
+- [x] **Step 53:** Dashboard Page - Trading overview with P&L and Greeks ✓
+- [x] **Step 54:** Positions Page - Virtual/Real portfolio management ✓
+- [x] **Step 55:** Alerts Page - Price and P&L alerts management ✓
+- [x] **Step 56:** Navigation Link - Add Cabinet button to main calculator page ✓
+- [x] **Step 57:** Back Link - Add "Back to Calculator" in cabinet sidebar ✓
+- [x] **Step 58:** Check 7 - All routes working (/, /cabinet, /cabinet/positions, /cabinet/alerts) ✓
+
+**Phase 8 Complete! Cabinet integrated with main calculator.**
+
+---
+
+## Phase 9: Real Bybit API Integration (Steps 59-62)
+
+- [x] **Step 59:** Bybit API Route - Create Next.js API route for positions ✓
+- [x] **Step 60:** Signature Fix - Correct HMAC-SHA256 signature generation ✓
+- [x] **Step 61:** Real Positions - Fetch actual positions from Bybit API ✓
+- [x] **Step 62:** Check 8 - Real Bybit positions displayed in UI ✓
+
+**Phase 9 Complete! Real Bybit positions now showing.**
+
+## Phase 10: Real-time Market & IV Skew (Steps 63-66)
+
+- [ ] **Step 63:** Live Spot Price - Extract underlyingPrice from Bybit WS and broadcast to frontend
+- [ ] **Step 64:** Live IV Sync - Use ATM IV from Bybit to auto-fill scenario volatility
+- [ ] **Step 65:** Strategy Persistence - Save/Load virtual strategies from local storage or backend
+- [ ] **Step 66:** Final Design Tweaks - Performance optimization for D3 Canvas
+
+---
+
 ## Notes
 
-*Backend:* Go 1.22+, gonum/mat, chi router
+*Backend:* Go 1.22+, gonum/mat, chi router, PostgreSQL, Redis
 *Frontend:* Next.js 14+, TypeScript, Tailwind, D3.js (Canvas)
 *Target:* ETHUSDT and ETH/BTC options analytics
+
+### Quick Launch
+
+**Frontend only (mock data):**
+```bash
+cd frontend && npm run dev
+```
+
+**Full stack with Docker:**
+```bash
+docker-compose up -d
+```
+
+### Routes
+- `/` - Main Options Calculator with Heatmap
+- `/cabinet` - Personal Cabinet Dashboard
+- `/cabinet/positions` - Portfolio Management (with real Bybit positions)
+- `/cabinet/alerts` - Alerts Management
+
+### Bybit API Integration
+- API Key configured: `RUqj3bpXzRlrVgIVDa`
+- Endpoint: `/v5/position/list?category=option`
+- Real-time positions with Greeks (Delta, Gamma, Theta, Vega)

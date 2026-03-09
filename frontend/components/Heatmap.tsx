@@ -62,12 +62,14 @@ export default function Heatmap() {
     ctx.clearRect(0, 0, width, height);
 
     // Draw heatmap cells
+    // Backend: time_axis[0] = max days (30), time_axis[last] = 0 days (expiry)
+    // We want: more days at TOP, expiry at BOTTOM
+    // So row 0 (30 days) draws at top (y=0), row last (0 days) draws at bottom
     for (let t = 0; t < timeSteps; t++) {
       for (let p = 0; p < priceSteps; p++) {
         const pnl = pnl_matrix[t][p];
         const x = p * cellWidth;
-        // Invert Y axis: higher time index (t) is at the top (DTE descending)
-        const y = (timeSteps - 1 - t) * cellHeight;
+        const y = t * cellHeight;
 
         ctx.fillStyle = colorScale(pnl);
         ctx.fillRect(x, y, cellWidth + 0.5, cellHeight + 0.5);
@@ -85,7 +87,7 @@ export default function Heatmap() {
         if (pnl1 * pnl2 < 0) {
           const ratio = Math.abs(pnl1) / (Math.abs(pnl1) + Math.abs(pnl2));
           const x = (p + ratio) * cellWidth;
-          const y = (timeSteps - 1 - t) * cellHeight;
+          const y = t * cellHeight;
           if (p === 0 || pnl_matrix[t][p - 1] * pnl1 >= 0) {
             ctx.moveTo(x, y);
           } else {
@@ -96,9 +98,8 @@ export default function Heatmap() {
     }
     ctx.stroke();
 
-    // Draw current spot price line
-    const currentPrice = data.price_axis[0] / 0.7; // Reversing the 0.7 range from matrix.go
-    const spotX = xScale(currentPrice);
+    // Draw current spot price line (from backend response)
+    const spotX = xScale(data.underlying_price);
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.lineWidth = 1;
     ctx.setLineDash([5, 5]);
@@ -128,7 +129,8 @@ export default function Heatmap() {
     const cellHeight = height / timeSteps;
 
     const p = Math.floor(x / cellWidth);
-    const t = timeSteps - 1 - Math.floor(y / cellHeight);
+    // No inversion: row 0 = top = more days, row last = bottom = expiry
+    const t = Math.floor(y / cellHeight);
 
     if (p >= 0 && p < priceSteps && t >= 0 && t < timeSteps) {
       setTooltip({
@@ -172,8 +174,9 @@ export default function Heatmap() {
     <div className="w-full h-full flex flex-col">
       <div className="flex-1 min-h-0 relative flex">
          {/* Y Axis Labels (Time/Days) */}
+         {/* time_axis[0] = max days (top), time_axis[last] = 0 days (bottom) */}
          <div className="w-12 flex flex-col justify-between py-1 text-[10px] text-zinc-500 font-mono pr-2 text-right shrink-0">
-          {[...data.time_axis].reverse().map((d, i) => i % 10 === 0 ? <span key={i}>{Math.round(d)}d</span> : <span key={i} className="opacity-0">.</span>)}
+          {data.time_axis.map((d, i) => i % 10 === 0 ? <span key={i}>{Math.round(d)}d</span> : <span key={i} className="opacity-0">.</span>)}
         </div>
 
         <div ref={containerRef} className="flex-1 relative bg-[#0a0a0a] border border-[#2a2e39] rounded-lg overflow-hidden group">

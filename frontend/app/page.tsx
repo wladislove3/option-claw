@@ -1,12 +1,15 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useBuilderStore } from '@/store/builderStore';
 import Heatmap from '@/components/Heatmap';
 import LegInput from '@/components/LegInput';
-import { Activity, LayoutDashboard, Settings2, BarChart3, TrendingUp } from 'lucide-react';
+import SettingsModal from '@/components/SettingsModal';
+import { Activity, LayoutDashboard, Settings2, BarChart3, TrendingUp, Settings, User } from 'lucide-react';
 
 export default function Home() {
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
   const { 
     underlyingPrice, setUnderlyingPrice,
     volatility, setVolatility,
@@ -40,12 +43,28 @@ export default function Home() {
           </div>
           <div className="w-px h-8 bg-[#2a2e39]" />
           <div className="flex gap-2">
+             <Link
+                href="/cabinet"
+                className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium text-white transition-all"
+             >
+                <User className="w-4 h-4" />
+                Cabinet
+             </Link>
+             <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2 bg-[#131722] border border-[#2a2e39] rounded-lg hover:bg-[#2a2e39] transition-colors group"
+                title="API Settings"
+             >
+                <Settings className="w-4 h-4 text-zinc-500 group-hover:text-blue-500 transition-colors" />
+             </button>
              <div className="p-2 bg-[#131722] border border-[#2a2e39] rounded-lg">
                 <TrendingUp className="w-4 h-4 text-green-500" />
              </div>
           </div>
         </div>
       </div>
+
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       <div className="max-w-[1600px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-6">
         

@@ -78,12 +78,13 @@ func GeneratePnLMatrix(req MatrixRequest, priceSteps, timeSteps int) MatrixRespo
 	}
 
 	return MatrixResponse{
-		PriceAxis:  priceAxis,
-		TimeAxis:   timeAxis,
-		PnLMatrix:  pnlMatrix,
-		MaxProfit:  maxProfit,
-		MaxLoss:    maxLoss,
-		Breakevens: findBreakevens(pnlMatrix, priceAxis, timeAxis),
+		PriceAxis:       priceAxis,
+		TimeAxis:        timeAxis,
+		PnLMatrix:       pnlMatrix,
+		MaxProfit:       maxProfit,
+		MaxLoss:         maxLoss,
+		Breakevens:      findBreakevens(pnlMatrix, priceAxis, timeAxis),
+		UnderlyingPrice: req.UnderlyingPrice,
 	}
 }
 

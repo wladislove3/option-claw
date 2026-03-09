@@ -169,3 +169,193 @@ func TestMatrixGeneration(t *testing.T) {
 	t.Logf("Matrix generated: %dx%d, MaxProfit: %.2f, MaxLoss: %.2f",
 		len(response.PriceAxis), len(response.TimeAxis), response.MaxProfit, response.MaxLoss)
 }
+
+// TestAllLegCombinations tests all 4 combinations: CALL/PUT × LONG/SHORT
+func TestAllLegCombinations(t *testing.T) {
+	S := 3500.0      // Current underlying price
+	K := 3500.0      // ATM strike
+	T := 30.0 / 365.0 // 30 days to expiry
+	sigma := 0.65    // 65% IV
+	r := 0.05        // 5% risk-free rate
+
+	// Calculate option premiums at inception (T=30 days)
+	callPremium := BlackScholesPrice(S, K, T, sigma, r, Call)
+	putPremium := BlackScholesPrice(S, K, T, sigma, r, Put)
+
+	t.Logf("ATM Call Premium: $%.2f, ATM Put Premium: $%.2f", callPremium, putPremium)
+
+	testCases := []struct {
+		name              string
+		leg               OptionLeg
+		premium           float64
+		testPrice         float64 // Price at expiry for testing
+		expectedPnLSign   int     // Expected P&L sign: +1 positive, -1 negative, 0 any
+		description       string
+	}{
+		{
+			name: "Long Call - OTM at expiry (max loss = premium)",
+			leg:  OptionLeg{Type: Call, Side: Long, Strike: 3500, Premium: callPremium, Quantity: 1},
+			premium: callPremium,
+			testPrice: 3300.0, // OTM, expires worthless
+			expectedPnLSign: -1, // Should lose premium paid
+			description: "Long Call: Buy call, price goes down → lose premium",
+		},
+		{
+			name: "Long Call - ITM at expiry (profit)",
+			leg:  OptionLeg{Type: Call, Side: Long, Strike: 3500, Premium: callPremium, Quantity: 1},
+			premium: callPremium,
+			testPrice: 3800.0, // ITM by $300
+			expectedPnLSign: +1, // Should profit
+			description: "Long Call: Buy call, price goes up → profit",
+		},
+		{
+			name: "Short Call - OTM at expiry (max profit = premium)",
+			leg:  OptionLeg{Type: Call, Side: Short, Strike: 3500, Premium: callPremium, Quantity: 1},
+			premium: callPremium,
+			testPrice: 3300.0, // OTM, expires worthless
+			expectedPnLSign: +1, // Keep premium
+			description: "Short Call: Sell call, price stays down → keep premium",
+		},
+		{
+			name: "Short Call - ITM at expiry (loss)",
+			leg:  OptionLeg{Type: Call, Side: Short, Strike: 3500, Premium: callPremium, Quantity: 1},
+			premium: callPremium,
+			testPrice: 3800.0, // ITM by $300
+			expectedPnLSign: -1, // Should lose
+			description: "Short Call: Sell call, price goes up → loss",
+		},
+		{
+			name: "Long Put - OTM at expiry (max loss = premium)",
+			leg:  OptionLeg{Type: Put, Side: Long, Strike: 3500, Premium: putPremium, Quantity: 1},
+			premium: putPremium,
+			testPrice: 3700.0, // OTM, expires worthless
+			expectedPnLSign: -1, // Lose premium
+			description: "Long Put: Buy put, price goes up → lose premium",
+		},
+		{
+			name: "Long Put - ITM at expiry (profit)",
+			leg:  OptionLeg{Type: Put, Side: Long, Strike: 3500, Premium: putPremium, Quantity: 1},
+			premium: putPremium,
+			testPrice: 3200.0, // ITM by $300
+			expectedPnLSign: +1, // Should profit
+			description: "Long Put: Buy put, price goes down → profit",
+		},
+		{
+			name: "Short Put - OTM at expiry (max profit = premium)",
+			leg:  OptionLeg{Type: Put, Side: Short, Strike: 3500, Premium: putPremium, Quantity: 1},
+			premium: putPremium,
+			testPrice: 3700.0, // OTM, expires worthless
+			expectedPnLSign: +1, // Keep premium
+			description: "Short Put: Sell put, price stays up → keep premium",
+		},
+		{
+			name: "Short Put - ITM at expiry (loss)",
+			leg:  OptionLeg{Type: Put, Side: Short, Strike: 3500, Premium: putPremium, Quantity: 1},
+			premium: putPremium,
+			testPrice: 3200.0, // ITM by $300
+			expectedPnLSign: -1, // Should lose
+			description: "Short Put: Sell put, price goes down → loss",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Calculate P&L at expiry (T=0)
+			pnl := CalculateLegPnL(tc.leg, S, tc.testPrice, 0.0, sigma, r)
+
+			t.Logf("%s", tc.description)
+			t.Logf("  P&L at expiry (S=%.0f): $%.2f", tc.testPrice, pnl)
+
+			// Check P&L sign
+			if tc.expectedPnLSign != 0 {
+				if tc.expectedPnLSign > 0 && pnl <= 0 {
+					t.Errorf("Expected positive P&L, got %.2f", pnl)
+				}
+				if tc.expectedPnLSign < 0 && pnl >= 0 {
+					t.Errorf("Expected negative P&L, got %.2f", pnl)
+				}
+			}
+
+			// Verify max loss for long positions is limited to premium
+			if tc.leg.Side == Long {
+				maxLoss := -tc.leg.Premium * float64(tc.leg.Quantity)
+				if pnl < maxLoss-0.01 {
+					t.Errorf("Long position P&L (%.2f) below max loss (%.2f)", pnl, maxLoss)
+				}
+			}
+		})
+	}
+}
+
+// TestThetaDecay tests that time decay works correctly for long positions
+func TestThetaDecay(t *testing.T) {
+	S := 3500.0
+	K := 3500.0
+	sigma := 0.65
+	r := 0.05
+
+	// Get premium at 30 DTE
+	T30 := 30.0 / 365.0
+	callPremium30 := BlackScholesPrice(S, K, T30, sigma, r, Call)
+	putPremium30 := BlackScholesPrice(S, K, T30, sigma, r, Put)
+
+	longCall := OptionLeg{Type: Call, Side: Long, Strike: K, Premium: callPremium30, Quantity: 1}
+	longPut := OptionLeg{Type: Put, Side: Long, Strike: K, Premium: putPremium30, Quantity: 1}
+
+	// Test at same underlying price (ATM), but different time points
+	// Theta decay should reduce option value over time for long positions
+
+	// Long Call: at 30 DTE vs at 0 DTE (expiry)
+	pnl30Call := CalculateLegPnL(longCall, S, S, T30, sigma, r) // P&L if we mark to market at 30 DTE
+	pnlExpiryCall := CalculateLegPnL(longCall, S, S, 0.0, sigma, r) // P&L at expiry with same price
+
+	t.Logf("Long Call Theta Test:")
+	t.Logf("  P&L at 30 DTE (mark to market): $%.2f", pnl30Call)
+	t.Logf("  P&L at expiry (S=K): $%.2f", pnlExpiryCall)
+
+	// At expiry with S=K, call expires worthless, so P&L = -premium
+	expectedPnlExpiryCall := -callPremium30
+	if math.Abs(pnlExpiryCall-expectedPnlExpiryCall) > 0.01 {
+		t.Errorf("Long Call at expiry: got %.2f, expected %.2f", pnlExpiryCall, expectedPnlExpiryCall)
+	}
+
+	// Long Put: same logic
+	pnl30Put := CalculateLegPnL(longPut, S, S, T30, sigma, r)
+	pnlExpiryPut := CalculateLegPnL(longPut, S, S, 0.0, sigma, r)
+
+	t.Logf("Long Put Theta Test:")
+	t.Logf("  P&L at 30 DTE (mark to market): $%.2f", pnl30Put)
+	t.Logf("  P&L at expiry (S=K): $%.2f", pnlExpiryPut)
+
+	// At expiry with S=K, put expires worthless
+	expectedPnlExpiryPut := -putPremium30
+	if math.Abs(pnlExpiryPut-expectedPnlExpiryPut) > 0.01 {
+		t.Errorf("Long Put at expiry: got %.2f, expected %.2f", pnlExpiryPut, expectedPnlExpiryPut)
+	}
+}
+
+// TestShortPositionTheta tests that theta decay benefits short positions
+func TestShortPositionTheta(t *testing.T) {
+	S := 3500.0
+	K := 3500.0
+	sigma := 0.65
+	r := 0.05
+
+	T30 := 30.0 / 365.0
+	callPremium30 := BlackScholesPrice(S, K, T30, sigma, r, Call)
+
+	shortCall := OptionLeg{Type: Call, Side: Short, Strike: K, Premium: callPremium30, Quantity: 1}
+
+	// Short call: receive premium upfront
+	// At expiry with S=K, option expires worthless, keep full premium
+	pnlExpiry := CalculateLegPnL(shortCall, S, S, 0.0, sigma, r)
+
+	t.Logf("Short Call Theta Test:")
+	t.Logf("  Premium received: $%.2f", callPremium30)
+	t.Logf("  P&L at expiry (S=K): $%.2f", pnlExpiry)
+
+	// Should keep full premium
+	if math.Abs(pnlExpiry-callPremium30) > 0.01 {
+		t.Errorf("Short Call at expiry: got %.2f, expected %.2f (full premium)", pnlExpiry, callPremium30)
+	}
+}
