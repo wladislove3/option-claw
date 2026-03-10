@@ -138,5 +138,5 @@ func (s *Subscription) DaysUntilExpiry() int {
 	if hours < 0 {
 		return 0
 	}
-	return int(hours / 24)
+	return int((hours + 23.999999) / 24)
 }

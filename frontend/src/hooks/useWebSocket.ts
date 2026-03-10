@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 interface UseWebSocketOptions {
   reconnectInterval?: number;
@@ -9,9 +9,12 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
   const { reconnectInterval = 3000, maxReconnectAttempts = 5 } = options;
   
   const [connected, setConnected] = useState(false);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
+  const reconnectCountRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     const ws = new WebSocket(url);
@@ -20,6 +23,7 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
       console.log('WebSocket connected');
       setConnected(true);
       setError(null);
+      reconnectCountRef.current = 0;
       setReconnectCount(0);
     };
 
@@ -42,11 +46,13 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
       setConnected(false);
       
       // Attempt to reconnect
-      if (reconnectCount < maxReconnectAttempts) {
-        console.log(`Reconnecting... attempt ${reconnectCount + 1}`);
-        setTimeout(() => {
-          setReconnectCount((prev) => prev + 1);
-          connect();
+      if (reconnectCountRef.current < maxReconnectAttempts) {
+        reconnectCountRef.current += 1;
+        const nextAttempt = reconnectCountRef.current;
+        console.log(`Reconnecting... attempt ${nextAttempt}`);
+        setReconnectCount(nextAttempt);
+        reconnectTimerRef.current = setTimeout(() => {
+          connectRef.current();
         }, reconnectInterval);
       }
     };
@@ -54,11 +60,23 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
     return () => {
       ws.close();
     };
-  }, [url, reconnectInterval, maxReconnectAttempts, reconnectCount]);
+  }, [url, reconnectInterval, maxReconnectAttempts]);
+
+  useEffect(() => {
+    connectRef.current = () => {
+      const cleanup = connect();
+      return cleanup;
+    };
+  }, [connect]);
 
   useEffect(() => {
     const cleanup = connect();
-    return cleanup;
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      cleanup();
+    };
   }, [connect]);
 
   return { connected, data, error, reconnectCount };

@@ -19,6 +19,11 @@ const Icons = {
   )
 };
 
+function SortIcon({ activeColumn, columnName, direction }) {
+  if (activeColumn !== columnName) return <Icons.SortNone />;
+  return direction === 'asc' ? <Icons.SortAsc /> : <Icons.SortDesc />;
+}
+
 function PositionList({ positions = [], loading, error, showGreeks = false }) {
   const [sortConfig, setSortConfig] = useState({ key: 'symbol', direction: 'asc' });
   const [filter, setFilter] = useState('all');
@@ -63,11 +68,6 @@ function PositionList({ positions = [], loading, error, showGreeks = false }) {
       direction = 'desc';
     }
     setSortConfig({ key, direction });
-  };
-
-  const SortIcon = ({ columnName }) => {
-    if (sortConfig.key !== columnName) return <Icons.SortNone />;
-    return sortConfig.direction === 'asc' ? <Icons.SortAsc /> : <Icons.SortDesc />;
   };
 
   if (loading) {
@@ -138,39 +138,39 @@ function PositionList({ positions = [], loading, error, showGreeks = false }) {
           <thead>
             <tr>
               <th onClick={() => requestSort('symbol')} className="sortable">
-                Symbol <SortIcon columnName="symbol" />
+                Symbol <SortIcon activeColumn={sortConfig.key} columnName="symbol" direction={sortConfig.direction} />
               </th>
               <th onClick={() => requestSort('type')} className="sortable">
-                Type <SortIcon columnName="type" />
+                Type <SortIcon activeColumn={sortConfig.key} columnName="type" direction={sortConfig.direction} />
               </th>
               <th onClick={() => requestSort('strike')} className="sortable text-right">
-                Strike <SortIcon columnName="strike" />
+                Strike <SortIcon activeColumn={sortConfig.key} columnName="strike" direction={sortConfig.direction} />
               </th>
               <th onClick={() => requestSort('size')} className="sortable text-right">
-                Qty <SortIcon columnName="size" />
+                Qty <SortIcon activeColumn={sortConfig.key} columnName="size" direction={sortConfig.direction} />
               </th>
               <th onClick={() => requestSort('entryPrice')} className="sortable text-right">
-                Entry <SortIcon columnName="entryPrice" />
+                Entry <SortIcon activeColumn={sortConfig.key} columnName="entryPrice" direction={sortConfig.direction} />
               </th>
               <th onClick={() => requestSort('markPrice')} className="sortable text-right">
-                Mark <SortIcon columnName="markPrice" />
+                Mark <SortIcon activeColumn={sortConfig.key} columnName="markPrice" direction={sortConfig.direction} />
               </th>
               <th onClick={() => requestSort('unrealisedPnl')} className="sortable text-right">
-                P&L <SortIcon columnName="unrealisedPnl" />
+                P&L <SortIcon activeColumn={sortConfig.key} columnName="unrealisedPnl" direction={sortConfig.direction} />
               </th>
               {showGreeks && (
                 <>
                   <th onClick={() => requestSort('delta')} className="sortable text-right">
-                    Delta <SortIcon columnName="delta" />
+                    Delta <SortIcon activeColumn={sortConfig.key} columnName="delta" direction={sortConfig.direction} />
                   </th>
                   <th onClick={() => requestSort('gamma')} className="sortable text-right">
-                    Gamma <SortIcon columnName="gamma" />
+                    Gamma <SortIcon activeColumn={sortConfig.key} columnName="gamma" direction={sortConfig.direction} />
                   </th>
                   <th onClick={() => requestSort('theta')} className="sortable text-right">
-                    Theta <SortIcon columnName="theta" />
+                    Theta <SortIcon activeColumn={sortConfig.key} columnName="theta" direction={sortConfig.direction} />
                   </th>
                   <th onClick={() => requestSort('vega')} className="sortable text-right">
-                    Vega <SortIcon columnName="vega" />
+                    Vega <SortIcon activeColumn={sortConfig.key} columnName="vega" direction={sortConfig.direction} />
                   </th>
                 </>
               )}

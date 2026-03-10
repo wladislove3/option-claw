@@ -20,6 +20,15 @@ const Icons = {
   )
 };
 
+function FieldError({ error, id }) {
+  if (!error) return null;
+  return (
+    <span className="error-text" id={id}>
+      <Icons.AlertCircle /> {error}
+    </span>
+  );
+}
+
 function CreatePositionForm({ onSubmit, onCancel }) {
   const formId = useId();
   const [formData, setFormData] = useState({
@@ -124,15 +133,6 @@ function CreatePositionForm({ onSubmit, onCancel }) {
     }
   };
 
-  const FieldError = ({ name }) => {
-    if (!errors[name] || !touched[name]) return null;
-    return (
-      <span className="error-text" id={`${formId}-${name}-error`}>
-        <Icons.AlertCircle /> {errors[name]}
-      </span>
-    );
-  };
-
   return (
     <form onSubmit={handleSubmit} className="create-position-form" noValidate>
       <div className="form-header">
@@ -160,7 +160,7 @@ function CreatePositionForm({ onSubmit, onCancel }) {
             ))}
           </select>
         </div>
-        <FieldError name="type" />
+        <FieldError error={touched.type ? errors.type : null} id={`${formId}-type-error`} />
       </div>
 
       <div className="form-group">
@@ -179,7 +179,7 @@ function CreatePositionForm({ onSubmit, onCancel }) {
             aria-describedby={errors.symbol && touched.symbol ? `${formId}-symbol-error` : undefined}
           />
         </div>
-        <FieldError name="symbol" />
+        <FieldError error={touched.symbol ? errors.symbol : null} id={`${formId}-symbol-error`} />
       </div>
 
       <div className="form-row">
@@ -201,7 +201,7 @@ function CreatePositionForm({ onSubmit, onCancel }) {
               aria-describedby={errors.strike && touched.strike ? `${formId}-strike-error` : undefined}
             />
           </div>
-          <FieldError name="strike" />
+          <FieldError error={touched.strike ? errors.strike : null} id={`${formId}-strike-error`} />
         </div>
 
         <div className="form-group">
@@ -219,7 +219,7 @@ function CreatePositionForm({ onSubmit, onCancel }) {
               aria-describedby={errors.expiration && touched.expiration ? `${formId}-expiration-error` : undefined}
             />
           </div>
-          <FieldError name="expiration" />
+          <FieldError error={touched.expiration ? errors.expiration : null} id={`${formId}-expiration-error`} />
         </div>
       </div>
 
@@ -241,7 +241,7 @@ function CreatePositionForm({ onSubmit, onCancel }) {
               aria-describedby={errors.quantity && touched.quantity ? `${formId}-quantity-error` : undefined}
             />
           </div>
-          <FieldError name="quantity" />
+          <FieldError error={touched.quantity ? errors.quantity : null} id={`${formId}-quantity-error`} />
         </div>
 
         <div className="form-group">
@@ -262,7 +262,7 @@ function CreatePositionForm({ onSubmit, onCancel }) {
               aria-describedby={errors.entryPrice && touched.entryPrice ? `${formId}-entryPrice-error` : undefined}
             />
           </div>
-          <FieldError name="entryPrice" />
+          <FieldError error={touched.entryPrice ? errors.entryPrice : null} id={`${formId}-entryPrice-error`} />
         </div>
       </div>
 

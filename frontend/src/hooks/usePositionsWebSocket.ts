@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface PositionWS {
   symbol: string;
@@ -22,118 +22,205 @@ interface PositionMessage {
 }
 
 interface UsePositionsWebSocketOptions {
+  enabled?: boolean;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
 }
+
+type ReconnectTimer = ReturnType<typeof setTimeout>;
 
 export function usePositionsWebSocket(
   url: string,
   options: UsePositionsWebSocketOptions = {}
 ) {
-  const { reconnectInterval = 3000, maxReconnectAttempts = 10 } = options;
+  const {
+    enabled = true,
+    reconnectInterval = 3000,
+    maxReconnectAttempts = 10,
+  } = options;
 
   const [connected, setConnected] = useState(false);
   const [positions, setPositions] = useState<PositionWS[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isConnectingRef = useRef(false);
 
-  const disconnect = useCallback(() => {
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<ReconnectTimer | null>(null);
+  const isConnectingRef = useRef(false);
+  const reconnectCountRef = useRef(0);
+  const manualCloseRef = useRef(false);
+  const unmountedRef = useRef(false);
+  const openSocketRef = useRef<() => void>(() => {});
+
+  const clearReconnectTimer = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    
-    if (wsRef.current) {
-      wsRef.current.onclose = null; // Prevent reconnect on manual close
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    
-    isConnectingRef.current = false;
   }, []);
 
-  const connect = useCallback(() => {
-    if (isConnectingRef.current) {
+  const closeSocket = useCallback((manualClose: boolean) => {
+    manualCloseRef.current = manualClose;
+    clearReconnectTimer();
+    isConnectingRef.current = false;
+
+    const socket = wsRef.current;
+    wsRef.current = null;
+
+    if (!socket) {
+      return;
+    }
+
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+
+    if (
+      socket.readyState === WebSocket.OPEN ||
+      socket.readyState === WebSocket.CONNECTING
+    ) {
+      socket.close();
+    }
+  }, [clearReconnectTimer]);
+
+  const openSocket = useCallback(() => {
+    if (!enabled || manualCloseRef.current || unmountedRef.current || isConnectingRef.current) {
+      return;
+    }
+
+    const current = wsRef.current;
+    if (
+      current &&
+      (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
     isConnectingRef.current = true;
-    
-    try {
-      const ws = new WebSocket(url);
-      wsRef.current = ws;
 
-      ws.onopen = () => {
-        console.log('Positions WebSocket connected');
+    try {
+      const socket = new WebSocket(url);
+      wsRef.current = socket;
+
+      socket.onopen = () => {
+        if (wsRef.current !== socket) {
+          socket.close();
+          return;
+        }
+
+        isConnectingRef.current = false;
+        reconnectCountRef.current = 0;
+        setReconnectCount(0);
         setConnected(true);
         setError(null);
-        setReconnectCount(0);
-        isConnectingRef.current = false;
       };
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
         try {
           const message: PositionMessage = JSON.parse(event.data);
-          if (message.type === 'positions') {
-            setPositions(message.positions);
-            setLastUpdate(new Date(message.timestamp));
+          if (message.type !== 'positions') {
+            return;
           }
-        } catch (e) {
-          console.error('Failed to parse WebSocket message:', e);
+
+          setPositions(Array.isArray(message.positions) ? message.positions : []);
+          setLastUpdate(new Date(message.timestamp));
+        } catch (parseError) {
+          console.error('Failed to parse positions WebSocket message:', parseError);
         }
       };
 
-      ws.onerror = (err) => {
-        console.error('Positions WebSocket error:', err);
-        setError('WebSocket connection error');
+      socket.onerror = () => {
+        if (wsRef.current === socket) {
+          setError('WebSocket connection error');
+        }
       };
 
-      ws.onclose = () => {
-        console.log('Positions WebSocket disconnected');
-        setConnected(false);
+      socket.onclose = () => {
+        if (wsRef.current === socket) {
+          wsRef.current = null;
+        }
+
         isConnectingRef.current = false;
+        setConnected(false);
 
-        // Attempt to reconnect only if we haven't exceeded max attempts
-        if (reconnectCount < maxReconnectAttempts && reconnectTimeoutRef.current === null) {
-          console.log(`Reconnecting... attempt ${reconnectCount + 1}/${maxReconnectAttempts}`);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectTimeoutRef.current = null;
-            setReconnectCount((prev) => prev + 1);
-          }, reconnectInterval);
-        } else if (reconnectCount >= maxReconnectAttempts) {
-          setError('Max reconnection attempts reached');
+        if (
+          manualCloseRef.current ||
+          unmountedRef.current ||
+          !enabled ||
+          reconnectTimeoutRef.current
+        ) {
+          return;
         }
+
+        if (reconnectCountRef.current >= maxReconnectAttempts) {
+          setError('Max reconnection attempts reached');
+          return;
+        }
+
+        reconnectCountRef.current += 1;
+        setReconnectCount(reconnectCountRef.current);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          openSocketRef.current();
+        }, reconnectInterval);
       };
-    } catch (err) {
-      console.error('Failed to create WebSocket:', err);
-      setError('Failed to create WebSocket connection');
+    } catch (createError) {
       isConnectingRef.current = false;
+      setConnected(false);
+      setError('Failed to create WebSocket connection');
+      console.error('Failed to create positions WebSocket:', createError);
     }
-  }, [url, reconnectInterval, maxReconnectAttempts, reconnectCount]);
+  }, [enabled, maxReconnectAttempts, reconnectInterval, url]);
 
-  // Connect on mount and when URL changes
   useEffect(() => {
-    if (!wsRef.current && !isConnectingRef.current) {
-      connect();
-    }
+    openSocketRef.current = openSocket;
+  }, [openSocket]);
 
-    // Cleanup on unmount
+  const connect = useCallback(() => {
+    manualCloseRef.current = false;
+    clearReconnectTimer();
+    openSocketRef.current();
+  }, [clearReconnectTimer]);
+
+  const disconnect = useCallback(() => {
+    closeSocket(true);
+    setConnected(false);
+  }, [closeSocket]);
+
+  useEffect(() => {
+    unmountedRef.current = false;
     return () => {
-      disconnect();
+      unmountedRef.current = true;
+      closeSocket(true);
     };
-  }, [connect, disconnect]);
+  }, [closeSocket]);
 
-  // Reset reconnect count when successfully connected
   useEffect(() => {
-    if (connected) {
-      setReconnectCount(0);
+    if (!enabled) {
+      closeSocket(true);
+      return;
     }
-  }, [connected]);
 
-  return { connected, positions, error, reconnectCount, lastUpdate, connect, disconnect };
+    manualCloseRef.current = false;
+    const timer = setTimeout(() => {
+      openSocket();
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      closeSocket(true);
+    };
+  }, [closeSocket, enabled, openSocket, url]);
+
+  return {
+    connected,
+    positions,
+    error,
+    reconnectCount,
+    lastUpdate,
+    connect,
+    disconnect,
+  };
 }

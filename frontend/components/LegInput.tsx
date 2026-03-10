@@ -2,11 +2,17 @@
 
 import React from 'react';
 import { useBuilderStore } from '@/store/builderStore';
-import { Plus, Trash2, TrendingUp, TrendingDown, Layers } from 'lucide-react';
+import { Plus, Trash2, Layers, AlertTriangle } from 'lucide-react';
 import { OptionType, Side } from '@/types/options';
 
 export default function LegInput() {
-  const { addLeg, legs, removeLeg, calculate, isLoading } = useBuilderStore();
+  const addLeg = useBuilderStore((state) => state.addLeg);
+  const removeLeg = useBuilderStore((state) => state.removeLeg);
+  const validateLeg = useBuilderStore((state) => state.validateLeg);
+  const calculate = useBuilderStore((state) => state.calculate);
+  const legs = useBuilderStore((state) => state.legs);
+  const isLoading = useBuilderStore((state) => state.isLoading);
+  const error = useBuilderStore((state) => state.error);
   
   const [newLeg, setNewLeg] = React.useState({
     type: 'CALL' as OptionType,
@@ -17,7 +23,24 @@ export default function LegInput() {
   });
 
   const handleAdd = () => {
-    addLeg({ ...newLeg });
+    const leg = {
+      ...newLeg,
+      strike: Number(newLeg.strike),
+      premium: Number(newLeg.premium),
+      quantity: Number(newLeg.quantity),
+    };
+
+    if (validateLeg(leg)) {
+      addLeg(leg);
+      return;
+    }
+
+    addLeg(leg);
+    setNewLeg((current) => ({
+      ...current,
+      premium: Number.isFinite(current.premium) ? current.premium : 0,
+      quantity: 1,
+    }));
   };
 
   return (
@@ -104,10 +127,18 @@ export default function LegInput() {
         <button 
           type="button"
           onClick={handleAdd}
+          disabled={isLoading}
           className="w-full mt-2 bg-[#2563eb] hover:bg-[#1d4ed8] text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-[background-color,transform] active:scale-95 shadow-lg shadow-blue-900/20"
         >
           <Plus className="w-4 h-4" aria-hidden="true" /> Add to Strategy
         </button>
+
+        {error && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
       </div>
 
       {/* Legs List */}

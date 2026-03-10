@@ -6,9 +6,12 @@ import { useBuilderStore } from '@/store/builderStore';
 import { MousePointer2, Thermometer } from 'lucide-react';
 
 export default function Heatmap() {
-  const { matrixData: data, isLoading } = useBuilderStore();
+  const data = useBuilderStore((state) => state.matrixData);
+  const isLoading = useBuilderStore((state) => state.isLoading);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<number | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
     x: number;
@@ -17,19 +20,37 @@ export default function Heatmap() {
     days: number;
     pnl: number;
   } | null>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const container = containerRef.current;
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      setCanvasSize({ width: rect.width, height: rect.height });
+    };
+
+    updateSize();
+    resizeObserverRef.current = new ResizeObserver(updateSize);
+    resizeObserverRef.current.observe(container);
+
+    return () => {
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!data || !canvasRef.current || !containerRef.current) return;
 
     const canvas = canvasRef.current;
-    const container = containerRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size to match container
-    const rect = container.getBoundingClientRect();
-    const width = rect.width;
-    const height = rect.height;
+    const width = canvasSize.width;
+    const height = canvasSize.height;
+    if (!width || !height) return;
     
     // Handle high DPI displays
     const dpr = window.devicePixelRatio || 1;
@@ -37,6 +58,7 @@ export default function Heatmap() {
     canvas.height = height * dpr;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
     const { price_axis, time_axis, pnl_matrix, max_profit, max_loss } = data;
@@ -109,7 +131,7 @@ export default function Heatmap() {
     ctx.stroke();
     ctx.setLineDash([]);
 
-  }, [data, isLoading]);
+  }, [canvasSize.height, canvasSize.width, data, isLoading]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!data || !canvasRef.current) return;
@@ -133,13 +155,19 @@ export default function Heatmap() {
     const t = Math.floor(y / cellHeight);
 
     if (p >= 0 && p < priceSteps && t >= 0 && t < timeSteps) {
-      setTooltip({
-        visible: true,
-        x: e.clientX,
-        y: e.clientY,
-        price: price_axis[p],
-        days: time_axis[t],
-        pnl: pnl_matrix[t][p],
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
+
+      frameRef.current = requestAnimationFrame(() => {
+        setTooltip({
+          visible: true,
+          x: e.clientX,
+          y: e.clientY,
+          price: price_axis[p],
+          days: time_axis[t],
+          pnl: pnl_matrix[t][p],
+        });
       });
     } else {
       setTooltip(null);
@@ -147,8 +175,18 @@ export default function Heatmap() {
   };
 
   const handleMouseLeave = () => {
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
     setTooltip(null);
   };
+
+  useEffect(() => () => {
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current);
+    }
+  }, []);
 
   if (isLoading) {
     return (

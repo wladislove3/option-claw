@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	gomath "math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -168,13 +169,13 @@ func calculateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateRequest(req math.MatrixRequest) error {
-	if req.UnderlyingPrice <= 0 {
+	if req.UnderlyingPrice <= 0 || gomath.IsNaN(req.UnderlyingPrice) || gomath.IsInf(req.UnderlyingPrice, 0) {
 		return fmt.Errorf("underlying_price must be positive")
 	}
-	if req.Volatility <= 0 {
+	if req.Volatility <= 0 || gomath.IsNaN(req.Volatility) || gomath.IsInf(req.Volatility, 0) {
 		return fmt.Errorf("volatility must be positive")
 	}
-	if req.RiskFreeRate < 0 {
+	if req.RiskFreeRate < 0 || gomath.IsNaN(req.RiskFreeRate) || gomath.IsInf(req.RiskFreeRate, 0) {
 		return fmt.Errorf("risk_free_rate cannot be negative")
 	}
 	if len(req.Legs) == 0 {
@@ -182,14 +183,14 @@ func validateRequest(req math.MatrixRequest) error {
 	}
 
 	for i, leg := range req.Legs {
-		if leg.Strike <= 0 {
+		if leg.Strike <= 0 || gomath.IsNaN(leg.Strike) || gomath.IsInf(leg.Strike, 0) {
 			return fmt.Errorf("leg %d: strike must be positive", i)
 		}
-		if leg.Premium < 0 {
+		if leg.Premium < 0 || gomath.IsNaN(leg.Premium) || gomath.IsInf(leg.Premium, 0) {
 			return fmt.Errorf("leg %d: premium cannot be negative", i)
 		}
-		if leg.Quantity == 0 {
-			return fmt.Errorf("leg %d: quantity must be non-zero", i)
+		if leg.Quantity <= 0 {
+			return fmt.Errorf("leg %d: quantity must be positive", i)
 		}
 	}
 

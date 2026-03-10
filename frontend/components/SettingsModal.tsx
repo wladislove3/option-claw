@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useBuilderStore } from '@/store/builderStore';
 import { X, Key, ShieldCheck, Save, Eye, EyeOff } from 'lucide-react';
 
@@ -10,17 +10,12 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { bybitApiKey, bybitApiSecret, setBybitCredentials } = useBuilderStore();
-  const [apiKey, setApiKey] = useState(bybitApiKey);
-  const [apiSecret, setApiSecret] = useState(bybitApiSecret);
+  const bybitApiKey = useBuilderStore((state) => state.bybitApiKey);
+  const bybitApiSecret = useBuilderStore((state) => state.bybitApiSecret);
+  const setBybitCredentials = useBuilderStore((state) => state.setBybitCredentials);
+  const [apiKey, setApiKey] = useState('');
+  const [apiSecret, setApiSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setApiKey(bybitApiKey);
-      setApiSecret(bybitApiSecret);
-    }
-  }, [isOpen, bybitApiKey, bybitApiSecret]);
 
   if (!isOpen) return null;
 
@@ -28,6 +23,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setBybitCredentials(apiKey, apiSecret);
     onClose();
   };
+
+  const currentApiKey = apiKey || bybitApiKey;
+  const currentApiSecret = apiSecret || bybitApiSecret;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -59,9 +57,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest flex items-center gap-2">
                 <Key className="w-3 h-3" /> Bybit API Key
               </label>
-              <input
-                type="text"
-                value={apiKey}
+                <input
+                  type="text"
+                value={currentApiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="Enter API Key"
                 className="w-full bg-[#0a0a0a] border border-[#2a2e39] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-all font-mono placeholder:text-zinc-700"
@@ -75,7 +73,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <div className="relative">
                 <input
                   type={showSecret ? 'text' : 'password'}
-                  value={apiSecret}
+                  value={currentApiSecret}
                   onChange={(e) => setApiSecret(e.target.value)}
                   placeholder="Enter API Secret"
                   className="w-full bg-[#0a0a0a] border border-[#2a2e39] rounded-xl px-4 py-3 pr-12 text-sm text-white focus:outline-none focus:border-blue-500 transition-all font-mono placeholder:text-zinc-700"

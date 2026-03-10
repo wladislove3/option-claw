@@ -100,14 +100,33 @@ func findBreakevens(matrix [][]float64, priceAxis, timeAxis []float64) []float64
 		pnl1 := matrix[expiryRow][i]
 		pnl2 := matrix[expiryRow][i+1]
 
+		if pnl1 == 0 {
+			breakevens = appendUniqueBreakeven(breakevens, priceAxis[i])
+			continue
+		}
+		if pnl2 == 0 {
+			breakevens = appendUniqueBreakeven(breakevens, priceAxis[i+1])
+			continue
+		}
+
 		// Check for sign change (breakeven)
 		if pnl1*pnl2 < 0 {
 			// Linear interpolation to find exact breakeven
 			ratio := math.Abs(pnl1) / (math.Abs(pnl1) + math.Abs(pnl2))
 			breakeven := priceAxis[i] + ratio*(priceAxis[i+1]-priceAxis[i])
-			breakevens = append(breakevens, breakeven)
+			breakevens = appendUniqueBreakeven(breakevens, breakeven)
 		}
 	}
 
 	return breakevens
+}
+
+func appendUniqueBreakeven(breakevens []float64, value float64) []float64 {
+	for _, existing := range breakevens {
+		if math.Abs(existing-value) < 1e-9 {
+			return breakevens
+		}
+	}
+
+	return append(breakevens, value)
 }

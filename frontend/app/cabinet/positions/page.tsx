@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Edit, Wifi, WifiOff, Activity } from 'lucide-react';
 import { usePositionsWebSocket } from '@/src/hooks/usePositionsWebSocket';
+import { getBackendHttpUrl, getBackendWebSocketUrl } from '@/src/lib/backend-url';
 
 interface Position {
   id: string;
   symbol: string;
+  optionSymbol: string;
   type: 'CALL' | 'PUT';
   side: 'BUY' | 'SELL';
   size: string;
@@ -28,6 +30,41 @@ interface PortfolioGreeks {
   totalVega: number;
 }
 
+interface RealPositionPayload {
+  symbol: string;
+  size: string;
+  side: string;
+  avgPrice: string;
+  markPrice: string;
+  positionValue: number;
+  unrealisedPnl: number;
+  unrealisedPnlPct: number;
+  delta: number;
+  gamma: number;
+  theta: number;
+  vega: number;
+}
+
+function formatRealPosition(pos: RealPositionPayload): Position {
+  return {
+    id: pos.symbol,
+    symbol: pos.symbol.split('-')[0] || 'ETH',
+    optionSymbol: pos.symbol,
+    type: pos.symbol.includes('C') ? 'CALL' : 'PUT',
+    side: pos.side === 'Buy' ? 'BUY' : 'SELL',
+    size: pos.size,
+    entryPrice: pos.avgPrice,
+    markPrice: pos.markPrice,
+    positionValue: Number(pos.positionValue) || 0,
+    unrealisedPnl: Number(pos.unrealisedPnl) || 0,
+    unrealisedPnlPercent: Number(pos.unrealisedPnlPct) || 0,
+    delta: Number(pos.delta) || 0,
+    gamma: Number(pos.gamma) || 0,
+    theta: Number(pos.theta) || 0,
+    vega: Number(pos.vega) || 0,
+  };
+}
+
 export default function PositionsPage() {
   const [positionType, setPositionType] = useState<'virtual' | 'real'>('virtual');
   const [positions, setPositions] = useState<Position[]>([]);
@@ -36,62 +73,77 @@ export default function PositionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  // WebSocket for real-time positions (backend on port 8080)
-  const wsUrl = typeof window !== 'undefined' 
-    ? `ws://${window.location.hostname}:8080/ws/positions`
-    : 'ws://localhost:8080/ws/positions';
+  const wsUrl = getBackendWebSocketUrl('/ws/positions');
   
   const {
     connected,
     positions: wsPositions,
     error: wsError,
     lastUpdate: wsLastUpdate
-  } = usePositionsWebSocket(wsUrl);
+  } = usePositionsWebSocket(wsUrl, {
+    enabled: positionType === 'real',
+  });
 
   // Handle WebSocket positions updates
   useEffect(() => {
-    if (positionType === 'real' && wsPositions.length > 0) {
-      const formattedPositions = wsPositions.map((pos) => ({
-        id: pos.symbol,
-        symbol: pos.symbol.split('-')[0] || 'ETH',
-        optionSymbol: pos.symbol,
-        type: pos.symbol.includes('C') ? 'CALL' : 'PUT',
-        side: pos.side === 'Buy' ? 'BUY' : 'SELL',
-        size: pos.size,
-        entryPrice: pos.avgPrice,
-        markPrice: pos.markPrice,
-        positionValue: pos.positionValue,
-        unrealisedPnl: pos.unrealisedPnl,
-        unrealisedPnlPercent: pos.unrealisedPnlPct,
-        delta: pos.delta,
-        gamma: pos.gamma,
-        theta: pos.theta,
-        vega: pos.vega,
-      }));
+    if (positionType === 'real') {
+      const formattedPositions = wsPositions.map(formatRealPosition);
       setPositions(formattedPositions);
       setLastUpdate(wsLastUpdate);
       setIsLoading(false);
+      if (wsError === null) {
+        setError(null);
+      }
     }
-  }, [wsPositions, wsLastUpdate, positionType]);
+  }, [positionType, wsError, wsLastUpdate, wsPositions]);
 
-  const fetchPositions = useCallback(() => {
+  useEffect(() => {
+    if (positionType === 'real') {
+      setError(wsError);
+    }
+  }, [positionType, wsError]);
+
+  const fetchPositions = useCallback(async () => {
     if (positionType === 'virtual') {
       setPositions(mockPositions);
       setLastUpdate(new Date());
+      setError(null);
+      setIsLoading(false);
       return;
     }
 
-    // For real positions, WebSocket will handle updates
-    // Just set loading state
     setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(getBackendHttpUrl('/api/positions'), {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      const payload = data as { positions?: RealPositionPayload[]; timestamp?: number };
+      const fallbackPositions = Array.isArray(payload.positions) ? payload.positions : [];
+      const formattedPositions = fallbackPositions.map(formatRealPosition);
+
+      setPositions(formattedPositions);
+      setLastUpdate(payload.timestamp ? new Date(payload.timestamp) : new Date());
+    } catch (fetchError: unknown) {
+      setError(fetchError instanceof Error ? fetchError.message : 'Failed to fetch positions');
+    } finally {
+      setIsLoading(false);
+    }
   }, [positionType]);
 
   useEffect(() => {
-    fetchPositions();
+    void fetchPositions();
   }, [fetchPositions]);
 
   const handleRefresh = () => {
-    fetchPositions();
+    void fetchPositions();
   };
 
   const handleDelete = (id: string) => {
@@ -363,16 +415,8 @@ export default function PositionsPage() {
   );
 }
 
-function Activity({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </svg>
-  );
-}
-
 const mockPositions: Position[] = [
-  { id: '1', symbol: 'ETH', type: 'CALL', side: 'BUY', size: '10', positionValue: 1500, markPrice: '195.05', unrealisedPnl: 450.50, unrealisedPnlPercent: 30.03, delta: 0.65, gamma: 0.02, theta: -5.2, vega: 12.3 },
-  { id: '2', symbol: 'ETH', type: 'PUT', side: 'SELL', size: '5', positionValue: 600, markPrice: '145.06', unrealisedPnl: -125.30, unrealisedPnlPercent: -20.88, delta: -0.35, gamma: 0.018, theta: 3.1, vega: -8.5 },
-  { id: '3', symbol: 'ETH', type: 'CALL', side: 'SELL', size: '8', positionValue: 640, markPrice: '51.25', unrealisedPnl: 230.00, unrealisedPnlPercent: 35.94, delta: -0.25, gamma: 0.015, theta: 4.5, vega: -10.2 },
+  { id: '1', symbol: 'ETH', optionSymbol: 'ETH-MOCK-C-1', type: 'CALL', side: 'BUY', size: '10', entryPrice: '150.00', positionValue: 1500, markPrice: '195.05', unrealisedPnl: 450.50, unrealisedPnlPercent: 30.03, delta: 0.65, gamma: 0.02, theta: -5.2, vega: 12.3 },
+  { id: '2', symbol: 'ETH', optionSymbol: 'ETH-MOCK-P-2', type: 'PUT', side: 'SELL', size: '5', entryPrice: '120.00', positionValue: 600, markPrice: '145.06', unrealisedPnl: -125.30, unrealisedPnlPercent: -20.88, delta: -0.35, gamma: 0.018, theta: 3.1, vega: -8.5 },
+  { id: '3', symbol: 'ETH', optionSymbol: 'ETH-MOCK-C-3', type: 'CALL', side: 'SELL', size: '8', entryPrice: '80.00', positionValue: 640, markPrice: '51.25', unrealisedPnl: 230.00, unrealisedPnlPercent: 35.94, delta: -0.25, gamma: 0.015, theta: 4.5, vega: -10.2 },
 ];

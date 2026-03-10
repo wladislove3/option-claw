@@ -1,20 +1,28 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-const BYBIT_API_KEY = 'RUqj3bpXzRlrVgIVDa';
-const BYBIT_API_SECRET = '0r3Onz3QkvnC3nbZmLZuE1RGt0KctfkdKPn1';
 const BYBIT_BASE_URL = 'https://api.bybit.com';
 
 export async function GET() {
+  const apiKey = process.env.BYBIT_API_KEY?.trim();
+  const apiSecret = process.env.BYBIT_API_SECRET?.trim();
+
+  if (!apiKey || !apiSecret) {
+    return NextResponse.json(
+      { error: 'Missing BYBIT_API_KEY or BYBIT_API_SECRET' },
+      { status: 500 }
+    );
+  }
+
   try {
     const timestamp = Date.now().toString();
     const recvWindow = '5000';
     const params = 'category=option';
     
     // Signature: timestamp + api_key + recv_window + query_string (no ? or &)
-    const signVal = timestamp + BYBIT_API_KEY + recvWindow + params;
+    const signVal = timestamp + apiKey + recvWindow + params;
     const signature = crypto
-      .createHmac('sha256', BYBIT_API_SECRET)
+      .createHmac('sha256', apiSecret)
       .update(signVal)
       .digest('hex');
 
@@ -23,7 +31,7 @@ export async function GET() {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'X-BAPI-API-KEY': BYBIT_API_KEY,
+        'X-BAPI-API-KEY': apiKey,
         'X-BAPI-SIGN': signature,
         'X-BAPI-SIGN-TYPE': '2',
         'X-BAPI-TIMESTAMP': timestamp,

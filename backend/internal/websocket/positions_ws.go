@@ -12,10 +12,21 @@ import (
 	"github.com/user/option-pro/backend/internal/bybit"
 )
 
+const (
+	positionReadTimeout  = 60 * time.Second
+	positionWriteTimeout = 10 * time.Second
+	positionPingPeriod   = 30 * time.Second
+)
+
+type positionsClient struct {
+	conn    *websocket.Conn
+	writeMu sync.Mutex
+}
+
 var (
-	clients   = make(map[*websocket.Conn]bool)
-	clientsMu sync.RWMutex
-	bybitClient *bybit.Client
+	positionClients   = make(map[*positionsClient]struct{})
+	positionClientsMu sync.RWMutex
+	bybitClient       *bybit.Client
 )
 
 // Position represents a Bybit option position for WebSocket
@@ -37,9 +48,9 @@ type Position struct {
 
 // PositionMessage is sent to all connected clients
 type PositionMessage struct {
-	Type       string     `json:"type"`
-	Positions  []Position `json:"positions"`
-	Timestamp  int64      `json:"timestamp"`
+	Type      string     `json:"type"`
+	Positions []Position `json:"positions"`
+	Timestamp int64      `json:"timestamp"`
 }
 
 // Init initializes the WebSocket with Bybit client
@@ -54,49 +65,121 @@ func WSPositionsHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println("WebSocket upgrade error:", err)
 		return
 	}
-	defer conn.Close()
 
-	clientsMu.Lock()
-	clients[conn] = true
-	clientsMu.Unlock()
+	client := &positionsClient{conn: conn}
+	registerPositionClient(client)
+	log.Println("Client connected. Total clients:", positionClientCount())
 
-	log.Println("Client connected. Total clients:", len(clients))
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() {
+			unregisterPositionClient(client)
+			_ = client.conn.Close()
+			log.Println("Client disconnected. Total clients:", positionClientCount())
+		})
+	}
+	defer cleanup()
 
-	// Send initial positions
-	sendPositions(conn)
-
-	// Handle messages from client (ping/pong)
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
-	})
-
-	// Keep connection alive
-	for {
-		_, _, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
+	if err := client.sendSnapshot(fetchBybitPositions()); err != nil {
+		log.Println("Error sending initial positions:", err)
+		return
 	}
 
-	clientsMu.Lock()
-	delete(clients, conn)
-	clientsMu.Unlock()
+	if err := client.conn.SetReadDeadline(time.Now().Add(positionReadTimeout)); err != nil {
+		log.Println("Error setting read deadline:", err)
+		return
+	}
+	client.conn.SetPongHandler(func(string) error {
+		return client.conn.SetReadDeadline(time.Now().Add(positionReadTimeout))
+	})
 
-	log.Println("Client disconnected. Total clients:", len(clients))
+	pingDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(positionPingPeriod)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := client.writePing(); err != nil {
+					cleanup()
+					return
+				}
+			case <-pingDone:
+				return
+			}
+		}
+	}()
+	defer close(pingDone)
+
+	for {
+		if _, _, err := client.conn.ReadMessage(); err != nil {
+			return
+		}
+	}
 }
 
-func sendPositions(conn *websocket.Conn) {
-	positions := fetchBybitPositions()
-
+func (c *positionsClient) sendSnapshot(positions []Position) error {
 	msg := PositionMessage{
 		Type:      "positions",
 		Positions: positions,
 		Timestamp: time.Now().UnixMilli(),
 	}
 
-	conn.WriteJSON(msg)
+	return c.writeJSON(msg)
+}
+
+func (c *positionsClient) writeJSON(v any) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	if err := c.conn.SetWriteDeadline(time.Now().Add(positionWriteTimeout)); err != nil {
+		return err
+	}
+
+	return c.conn.WriteJSON(v)
+}
+
+func (c *positionsClient) writePing() error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	deadline := time.Now().Add(positionWriteTimeout)
+	if err := c.conn.SetWriteDeadline(deadline); err != nil {
+		return err
+	}
+
+	return c.conn.WriteControl(websocket.PingMessage, []byte("ping"), deadline)
+}
+
+func registerPositionClient(client *positionsClient) {
+	positionClientsMu.Lock()
+	defer positionClientsMu.Unlock()
+	positionClients[client] = struct{}{}
+}
+
+func unregisterPositionClient(client *positionsClient) {
+	positionClientsMu.Lock()
+	defer positionClientsMu.Unlock()
+	delete(positionClients, client)
+}
+
+func snapshotPositionClients() []*positionsClient {
+	positionClientsMu.RLock()
+	defer positionClientsMu.RUnlock()
+
+	clients := make([]*positionsClient, 0, len(positionClients))
+	for client := range positionClients {
+		clients = append(clients, client)
+	}
+
+	return clients
+}
+
+func positionClientCount() int {
+	positionClientsMu.RLock()
+	defer positionClientsMu.RUnlock()
+	return len(positionClients)
 }
 
 func parseFloat(s string) float64 {
@@ -149,23 +232,28 @@ func fetchBybitPositions() []Position {
 
 // BroadcastPositions sends positions to all connected clients
 func BroadcastPositions() {
-	positions := fetchBybitPositions()
+	clients := snapshotPositionClients()
+	if len(clients) == 0 {
+		return
+	}
 
 	msg := PositionMessage{
 		Type:      "positions",
-		Positions: positions,
+		Positions: fetchBybitPositions(),
 		Timestamp: time.Now().UnixMilli(),
 	}
 
-	clientsMu.RLock()
-	defer clientsMu.RUnlock()
-
-	for client := range clients {
-		if err := client.WriteJSON(msg); err != nil {
+	failed := make([]*positionsClient, 0)
+	for _, client := range clients {
+		if err := client.writeJSON(msg); err != nil {
 			log.Println("Error sending to client:", err)
-			client.Close()
-			delete(clients, client)
+			failed = append(failed, client)
+			_ = client.conn.Close()
 		}
+	}
+
+	for _, client := range failed {
+		unregisterPositionClient(client)
 	}
 }
 
@@ -175,10 +263,13 @@ func StartPositionBroadcaster(interval time.Duration) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		if len(clients) > 0 {
-			log.Println("Broadcasting positions to", len(clients), "clients")
-			BroadcastPositions()
+		count := positionClientCount()
+		if count == 0 {
+			continue
 		}
+
+		log.Println("Broadcasting positions to", count, "clients")
+		BroadcastPositions()
 	}
 }
 

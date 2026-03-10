@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Bell, BellOff, Trash2, Check, Clock, AlertTriangle } from 'lucide-react';
+import { Bell, BellOff, Trash2, Clock, AlertTriangle } from 'lucide-react';
 
 interface Alert {
   id: string;

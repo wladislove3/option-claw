@@ -6,18 +6,19 @@ import { useBuilderStore } from '@/store/builderStore';
 import Heatmap from '@/components/Heatmap';
 import LegInput from '@/components/LegInput';
 import SettingsModal from '@/components/SettingsModal';
+import OptionChain from '@/components/OptionChain';
 import { Activity, LayoutDashboard, Settings2, BarChart3, TrendingUp, Settings, User } from 'lucide-react';
 
 export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
-  const { 
-    underlyingPrice, setUnderlyingPrice,
-    volatility, setVolatility,
-    daysToExpiry, setDaysToExpiry,
-    riskFreeRate, setRiskFreeRate,
-    matrixData,
-    isLoading
-  } = useBuilderStore();
+  const [selectedExpiry, setSelectedExpiry] = React.useState<string | undefined>(undefined);
+  const underlyingPrice = useBuilderStore((state) => state.underlyingPrice);
+  const setUnderlyingPrice = useBuilderStore((state) => state.setUnderlyingPrice);
+  const volatility = useBuilderStore((state) => state.volatility);
+  const setVolatility = useBuilderStore((state) => state.setVolatility);
+  const daysToExpiry = useBuilderStore((state) => state.daysToExpiry);
+  const setDaysToExpiry = useBuilderStore((state) => state.setDaysToExpiry);
+  const matrixData = useBuilderStore((state) => state.matrixData);
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-zinc-300 p-6 selection:bg-blue-500/30">
@@ -67,15 +68,15 @@ export default function Home() {
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       <div className="max-w-[1600px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-6">
-        
-        {/* Left Column: Input and Strategy */}
+
+        {/* Left Column: Scenario Parameters and Legs */}
         <div className="xl:col-span-3 space-y-6">
           <div className="bg-[#131722] border border-[#2a2e39] rounded-xl p-5 shadow-xl">
              <div className="flex items-center gap-3 mb-6 border-b border-[#2a2e39] pb-4">
                 <Settings2 className="w-4 h-4 text-blue-500" />
                 <h2 className="text-xs font-bold text-white uppercase tracking-widest">Scenario Parameters</h2>
              </div>
-             
+
              <div className="space-y-6">
                 <div className="space-y-3">
                   <div className="flex justify-between text-[10px] text-zinc-500 font-black uppercase">
@@ -196,18 +197,31 @@ export default function Home() {
               </div>
            </div>
 
-           {/* Footer Info */}
-           <div className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-[#2a2e39] rounded-xl">
-              <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                <Activity className="w-4 h-4 text-blue-500" />
-                Backend Engine: Golang 1.22 • Black-Scholes Numerical Integration
-              </div>
-              <div suppressHydrationWarning className="text-[10px] text-zinc-600 font-mono">
-                System Time: {new Date().toLocaleTimeString()}
-              </div>
-           </div>
+           {/* Live Option Chain */}
+           <OptionChain 
+             selectedExpiry={selectedExpiry} 
+             onExpiryChange={(expiry) => {
+               setSelectedExpiry(expiry);
+               const days = Math.floor((parseInt(expiry) - Date.now()) / (1000 * 60 * 60 * 24));
+               if (days > 0) setDaysToExpiry(days);
+             }}
+             onUnderlyingChange={(price) => {
+               setUnderlyingPrice(price);
+             }}
+           />
         </div>
 
+      </div>
+
+      {/* Page Footer */}
+      <div className="max-w-[1600px] mx-auto mt-6 flex items-center justify-between p-4 bg-[#0a0a0a] border border-[#2a2e39] rounded-xl">
+        <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+          <Activity className="w-4 h-4 text-blue-500" />
+          Backend Engine: Golang 1.22 • Black-Scholes Numerical Integration
+        </div>
+        <div suppressHydrationWarning className="text-[10px] text-zinc-600 font-mono">
+          System Time: {new Date().toLocaleTimeString()}
+        </div>
       </div>
     </main>
   );

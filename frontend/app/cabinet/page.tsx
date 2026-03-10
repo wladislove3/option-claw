@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Activity, Shield, Clock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react';
 
 interface Greeks {
   delta: number;
@@ -18,29 +18,33 @@ interface PnL {
 }
 
 export default function DashboardPage() {
-  const [greeks, setGreeks] = useState<Greeks>({
+  const [greeks] = useState<Greeks>({
     delta: 0,
     gamma: 0,
     theta: 0,
     vega: 0,
     rho: 0,
   });
-  const [pnl, setPnl] = useState<PnL>({
+  const [pnl] = useState<PnL>({
     total: 2847.52,
     unrealized: 1234.56,
     realized: 1612.96,
   });
-  const [positionsCount, setPositionsCount] = useState(5);
+  const [positionsCount] = useState(5);
   const [pnlHistory, setPnlHistory] = useState<{ time: string; value: number }[]>([]);
+
+  // Initialize P&L history on client only (avoid hydration mismatch)
+  useEffect(() => {
+    setPnlHistory(
+      Array.from({ length: 20 }, (_, i) => ({
+        time: new Date(Date.now() - (20 - i) * 5000).toLocaleTimeString(),
+        value: 2500 + Math.random() * 500,
+      }))
+    );
+  }, []);
 
   // Simulate P&L history updates
   useEffect(() => {
-    const initialHistory = Array.from({ length: 20 }, (_, i) => ({
-      time: new Date(Date.now() - (20 - i) * 5000).toLocaleTimeString(),
-      value: 2500 + Math.random() * 500,
-    }));
-    setPnlHistory(initialHistory);
-
     const interval = setInterval(() => {
       setPnlHistory((prev) => {
         const newHistory = [
@@ -69,6 +73,16 @@ export default function DashboardPage() {
   };
 
   const maxHistoryValue = Math.max(...pnlHistory.map((p) => Math.abs(p.value)), 1);
+  const pathData =
+    pnlHistory.length > 1
+      ? `M ${pnlHistory
+          .map((point, index) => {
+            const x = (index / (pnlHistory.length - 1)) * 400;
+            const y = 75 - (point.value / maxHistoryValue) * 60;
+            return `${x} ${y}`;
+          })
+          .join(' L ')}`
+      : '';
 
   return (
     <div className="p-8">
@@ -164,13 +178,7 @@ export default function DashboardPage() {
 
             {/* Line chart path */}
             <path
-              d={`M ${pnlHistory
-                .map((point, index) => {
-                  const x = (index / (pnlHistory.length - 1)) * 400;
-                  const y = 75 - (point.value / maxHistoryValue) * 60;
-                  return `${x} ${y}`;
-                })
-                .join(' L ')}`}
+              d={pathData}
               fill="none"
               stroke="#3b82f6"
               strokeWidth="2"

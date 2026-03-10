@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
  * Hook to fetch data from API
@@ -11,7 +11,7 @@ export function useFetch(fetchFn, defaultValue = null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const refetch = async () => {
+  const refetch = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -22,11 +22,11 @@ export function useFetch(fetchFn, defaultValue = null) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchFn]);
 
   useEffect(() => {
-    refetch();
-  }, []);
+    void refetch();
+  }, [refetch]);
 
   return { data, loading, error, refetch };
 }
@@ -39,7 +39,7 @@ export function useFetch(fetchFn, defaultValue = null) {
 export function useWebSocket(url) {
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState([]);
-  const wsRef = { current: null };
+  const wsRef = useRef(null);
 
   useEffect(() => {
     const ws = new WebSocket(url);
@@ -73,11 +73,11 @@ export function useWebSocket(url) {
     };
   }, [url]);
 
-  const sendMessage = (data) => {
+  const sendMessage = useCallback((data) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
     }
-  };
+  }, []);
 
   return { connected, messages, sendMessage };
 }

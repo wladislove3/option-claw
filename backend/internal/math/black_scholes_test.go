@@ -170,6 +170,49 @@ func TestMatrixGeneration(t *testing.T) {
 		len(response.PriceAxis), len(response.TimeAxis), response.MaxProfit, response.MaxLoss)
 }
 
+func TestMatrixResponseContract(t *testing.T) {
+	req := MatrixRequest{
+		UnderlyingPrice: 4000,
+		Volatility:      0.4,
+		RiskFreeRate:    0.03,
+		DaysToExpiry:    10,
+		Legs: []OptionLeg{
+			{Type: Call, Side: Long, Strike: 4000, Premium: 100, Quantity: 1},
+			{Type: Call, Side: Short, Strike: 4200, Premium: 40, Quantity: 1},
+		},
+	}
+
+	response := GeneratePnLMatrix(req, 11, 5)
+
+	if len(response.PriceAxis) != 11 || len(response.TimeAxis) != 5 {
+		t.Fatalf("unexpected response dimensions: prices=%d times=%d", len(response.PriceAxis), len(response.TimeAxis))
+	}
+
+	for rowIndex, row := range response.PnLMatrix {
+		if len(row) != len(response.PriceAxis) {
+			t.Fatalf("row %d width=%d want=%d", rowIndex, len(row), len(response.PriceAxis))
+		}
+	}
+
+	if response.UnderlyingPrice != req.UnderlyingPrice {
+		t.Fatalf("underlying price mismatch: got %.2f want %.2f", response.UnderlyingPrice, req.UnderlyingPrice)
+	}
+}
+
+func TestFindBreakevensIncludesExactZeroNodes(t *testing.T) {
+	matrix := [][]float64{
+		{1, 0, -1},
+	}
+	priceAxis := []float64{90, 100, 110}
+	timeAxis := []float64{0}
+
+	breakevens := findBreakevens(matrix, priceAxis, timeAxis)
+
+	if len(breakevens) != 1 || math.Abs(breakevens[0]-100) > 1e-9 {
+		t.Fatalf("expected exact breakeven at 100, got %#v", breakevens)
+	}
+}
+
 // TestAllLegCombinations tests all 4 combinations: CALL/PUT × LONG/SHORT
 func TestAllLegCombinations(t *testing.T) {
 	S := 3500.0      // Current underlying price

@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Briefcase, Bell, User, ArrowLeftToLine } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Bell, ArrowLeftToLine } from 'lucide-react';
 
 interface CabinetLayoutProps {
   children: React.ReactNode;
